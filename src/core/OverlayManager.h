@@ -24,7 +24,7 @@ private:
     ID3D11Device* dxDevice;
     ID3D11DeviceContext* dxContext;
 
-    ID3D11Texture2D* texture;
+    ID3D11Texture2D* texture = nullptr;
 
     DirectX::XMMATRIX overlayMatrix = DirectX::XMMatrixIdentity();
 

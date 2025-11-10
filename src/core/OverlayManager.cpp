@@ -1,10 +1,26 @@
 #include "OverlayManager.h"
 #include <iostream>
+#include <random>
+#include <iomanip>
+#include <sstream>
 
 Overlay::Overlay(ID3D11Device* device, ID3D11DeviceContext* context)
-    : dxDevice(device), dxContext(context) {
-        ID3D11Texture2D* texture = nullptr;
+    : dxDevice(device),
+      dxContext(context),
+      texture(nullptr)
+{
+    // Generate UUID
+    std::random_device rd;
+    std::stringstream ss;
+
+    ss << std::hex << std::setfill('0');
+
+    for (size_t i = 0; i < 16; i++) {
+        unsigned char byte = static_cast<unsigned char>(rd() & 0xFF);
+        ss << std::setw(2) << static_cast<int>(byte);
     }
+    uuid = ss.str();
+}
 
 Overlay::~Overlay() {
     if (texture) {
@@ -42,3 +58,6 @@ void Overlay::update() {
     }
 }
 
+void Overlay::setVROverlayHandle(vr::VROverlayHandle_t handle) {
+    overlayHandle = handle;
+}

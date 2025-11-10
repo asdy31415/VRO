@@ -1,6 +1,7 @@
 #include <d3d11.h>
 #include <memory>
 #include <DirectXMath.h>
+#include <openvr.h>
 #include "Capturer.h"
 
 class Overlay {
@@ -19,6 +20,12 @@ public:
     void setCapture(std::unique_ptr<BaseCapture> newCapture);
 
     void update();
+
+    void setVROverlayHandle(vr::VROverlayHandle_t handle);
+
+    vr::VROverlayHandle_t getVROverlayHandle() const { return overlayHandle; };
+
+    std::string getUUID() const { return uuid; }
     
 private:
     ID3D11Device* dxDevice;
@@ -29,4 +36,8 @@ private:
     DirectX::XMMATRIX overlayMatrix = DirectX::XMMatrixIdentity();
 
     std::unique_ptr<BaseCapture> capture = nullptr;
+
+    vr::VROverlayHandle_t overlayHandle = vr::k_ulOverlayHandleInvalid;
+
+    std::string uuid;
 };

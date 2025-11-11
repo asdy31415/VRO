@@ -1,42 +1,19 @@
 #include "OverlayRender.h"
 #include <iostream>
 
-OverlayRenderer::OverlayRenderer(ID3D11Device* device, ID3D11DeviceContext* context)
-    : dxDevice(device), dxContext(context),
-      vrSystem(nullptr)
-{
-    vr::EVRInitError eError = vr::VRInitError_None;
-
-    // Initialize OpenVR as an overlay application
-    vrSystem = vr::VR_Init(&eError, vr::VRApplication_Overlay);
-
-    if (eError != vr::VRInitError_None) {
-        vrSystem = nullptr;
-        std::cerr << "OpenVR VR_Init failed: " << vr::VR_GetVRInitErrorAsSymbol(eError) << std::endl;
-        return;
-    }
-
-    if (!vr::VROverlay()) {
-        std::cerr << "OpenVR VROverlay() failed." << std::endl;
-        vr::VR_Shutdown();
-        vrSystem = nullptr;
-        return;
-    }
-}
+OverlayRenderer::OverlayRenderer(ID3D11Device* device, ID3D11DeviceContext* context, VRSystemManager& manager)
+    : dxDevice(device), dxContext(context), vrManager(manager) {}
 
 /* Note: The main application is responsible for calling
    destroyVROverlay() on all overlays BEFORE destroying
    this OverlayRenderer object.*/
 OverlayRenderer::~OverlayRenderer() {
-    if (vrSystem) {
-        vr::VR_Shutdown();
-    }
-    vrSystem = nullptr;
+
 }
 
 // Creates the handle and stores it in the Overlay object
 bool OverlayRenderer::createVROverlay(Overlay& overlay) {
-    if (vrSystem == nullptr) {
+    if (!vrManager.isInitialized()) {
         std::cerr << "Cannot create overlay, renderer not initialized." << std::endl;
         return false;
     }

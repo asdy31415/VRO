@@ -1,4 +1,5 @@
 #include "OverlayManager.h"
+#include "VRSystemManager.h"
 #include <openvr.h>
 #include <d3d11.h>
 #include <DirectXMath.h>
@@ -6,7 +7,7 @@
 
 class OverlayRenderer {
 public:
-    OverlayRenderer(ID3D11Device* device, ID3D11DeviceContext* context);
+    OverlayRenderer(ID3D11Device* device, ID3D11DeviceContext* context, VRSystemManager& manager);
     ~OverlayRenderer();
 
     bool createVROverlay(Overlay& overlay);
@@ -15,13 +16,9 @@ public:
 
     void render(Overlay& ovarlay);
 
-    bool isInitialized() const { return vrSystem != nullptr; }
 private:
-    vr::IVRSystem* vrSystem = nullptr;
-    vr::VROverlayHandle_t overlayHandle;
+    VRSystemManager& vrManager;
 
     ID3D11Device* dxDevice;
     ID3D11DeviceContext* dxContext;
-
-    void setOverlay(Overlay &overlay);
 };

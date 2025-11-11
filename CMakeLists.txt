@@ -21,6 +21,7 @@ include_directories(VRO PRIVATE
     ${CMAKE_SOURCE_DIR}/src/render
     ${CMAKE_SOURCE_DIR}/src/osc
     ${CMAKE_SOURCE_DIR}/src/UI
+    ${CMAKE_SOURCE_DIR}/src/input
     ${CMAKE_SOURCE_DIR}/external/package
 )
 

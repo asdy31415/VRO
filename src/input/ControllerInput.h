@@ -1,5 +1,6 @@
 #include <openvr.h>
 #include "VRSystemManager.h"
+#include "ControllerManager.h"
 
 enum class ButtonState {
     NOT_PRESSED = 0,
@@ -10,7 +11,7 @@ enum class ButtonState {
 
 class ControllerButton {
 public:
-    ControllerButton(vr::EVRButtonId id, VRSystemManager& manager);
+    ControllerButton(vr::EVRButtonId id, VRSystemManager& vr_manager, ControllerManager& c_manager);
     ~ControllerButton();
 
     void update();
@@ -24,10 +25,10 @@ public:
     bool isHeld() const;
     
 private:
-    vr::TrackedDeviceIndex_t controllerIndex;
     vr::EVRButtonId buttonID;
 
     VRSystemManager& vrManager;
+    ControllerManager& controllerManager;
 
     ButtonState currentState; 
     bool wasDownLastFrame;  

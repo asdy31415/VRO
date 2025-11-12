@@ -1,18 +1,14 @@
 #include "ControllerInput.h"
 #include <iostream>
 
-ControllerButton::ControllerButton(vr::EVRButtonId id, VRSystemManager& manager)
+ControllerButton::ControllerButton(vr::EVRButtonId id, VRSystemManager& vr_manager, ControllerManager& controller_manager)
     : buttonID(id),
-      vrManager(manager),
-      controllerIndex(vr::k_unTrackedDeviceIndexInvalid),
+      vrManager(vr_manager),
+      controllerManager(controller_manager),
       currentState(ButtonState::NOT_PRESSED),
-      wasDownLastFrame(false) {
+      wasDownLastFrame(false) {}
 
-}
-
-ControllerButton::~ControllerButton() {
-
-}
+ControllerButton::~ControllerButton() {}
 
 void ControllerButton::update() {
     vr::IVRSystem* vrSystem = vrManager.getVRSystem();
@@ -20,22 +16,10 @@ void ControllerButton::update() {
         // If VR isn't running, reset to a safe state
         currentState = ButtonState::NOT_PRESSED;
         wasDownLastFrame = false;
-        controllerIndex = vr::k_unTrackedDeviceIndexInvalid;
         return;
     }
 
-    //Check for the right hand first, then the left.
-    controllerIndex = vrSystem->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand);
-    if (controllerIndex == vr::k_unTrackedDeviceIndexInvalid) {
-        controllerIndex = vrSystem->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand);
-    }
-
-    // Reset state if no controller is found
-    if (controllerIndex == vr::k_unTrackedDeviceIndexInvalid) {
-        currentState = ButtonState::NOT_PRESSED;
-        wasDownLastFrame = false;
-        return;
-    }
+    vr::TrackedDeviceIndex_t controllerIndex = controllerManager.getControllerIndex();
 
     // Get the controller's current state
     vr::VRControllerState_t controllerState;

@@ -34,8 +34,9 @@ void Overlay::setTransform(const DirectX::XMMATRIX& matrix) {
     return;
 }
 
+
 void Overlay::applyTransform(const DirectX::XMMATRIX& matrix) {
-    overlayMatrix = DirectX::XMMatrixMultiply(matrix, overlayMatrix);
+    overlayMatrix = DirectX::XMMatrixMultiply(overlayMatrix, matrix);
 }
 
 void Overlay::setCapture(std::unique_ptr<BaseCapture> newCapture) {

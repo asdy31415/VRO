@@ -1,12 +1,9 @@
 #include "ControllerTransform.h"
 
 static DirectX::XMMATRIX ConvertHmdMatrixToXMMATRIX(const vr::HmdMatrix34_t& mat) {
-    return DirectX::XMMATRIX(
-        mat.m[0][0], mat.m[0][1], mat.m[0][2], mat.m[0][3],
-        mat.m[1][0], mat.m[1][1], mat.m[1][2], mat.m[1][3],
-        mat.m[2][0], mat.m[2][1], mat.m[2][2], mat.m[2][3],
-        0.0f,        0.0f,        0.0f,        1.0f        
-    );
+    DirectX::XMMATRIX xmMat = DirectX::XMMatrixIdentity();
+    memcpy(&xmMat, &mat, sizeof(mat));
+    return xmMat;
 }
 
 ControllerTransform::ControllerTransform(VRSystemManager& vr_manager, ControllerManager& controller_Manager)

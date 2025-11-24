@@ -1,4 +1,5 @@
 #include "VRSystemManager.h"
+
 #include <iostream>
 
 VRSystemManager::VRSystemManager() {

@@ -1,4 +1,5 @@
 #include <openvr.h>
+
 #include"VRSystemManager.h"
 
 class ControllerManager {

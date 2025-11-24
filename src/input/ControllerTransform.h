@@ -1,6 +1,7 @@
 #include <openvr.h>
 #include <d3d11.h>
 #include <DirectXMath.h>
+
 #include "ControllerManager.h"
 #include "VRSystemManager.h"
 

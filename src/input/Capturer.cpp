@@ -1,4 +1,5 @@
 #include "Capturer.h"
+
 #include <iostream>
 
 // Sets DPI for consistent window scaling behavior.

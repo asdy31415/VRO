@@ -1,9 +1,11 @@
-#include "OverlayManager.h"
-#include "VRSystemManager.h"
 #include <openvr.h>
 #include <d3d11.h>
 #include <DirectXMath.h>
 #include <string>
+
+#include "OverlayManager.h"
+#include "VRSystemManager.h"
+
 
 class OverlayRenderer {
 public:

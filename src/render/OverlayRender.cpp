@@ -1,4 +1,5 @@
 #include "OverlayRender.h"
+
 #include <iostream>
 
 OverlayRenderer::OverlayRenderer(ID3D11Device* device, ID3D11DeviceContext* context, VRSystemManager& manager)

@@ -1,6 +1,7 @@
 #include <openvr.h>
 #include <d3d11.h>
 #include <DirectXMath.h>
+
 #include "VRSystemManager.h"
 #include "ControllerTransform.h"
 #include "ControllerInput.h"
@@ -20,5 +21,7 @@ class Grabber {
 public:
     Grabber(Overlay& ovelay);
     ~Grabber();
+
+    
 
 };

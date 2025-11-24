@@ -1,4 +1,5 @@
 #include "ControllerInput.h"
+
 #include <iostream>
 
 ControllerButton::ControllerButton(vr::EVRButtonId id, VRSystemManager& vr_manager, ControllerManager& controller_manager)

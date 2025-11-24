@@ -2,6 +2,7 @@
 #include <memory>
 #include <DirectXMath.h>
 #include <openvr.h>
+
 #include "Capturer.h"
 
 class Overlay {

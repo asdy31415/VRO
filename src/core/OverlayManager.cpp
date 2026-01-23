@@ -63,3 +63,23 @@ void Overlay::update() {
 void Overlay::setVROverlayHandle(vr::VROverlayHandle_t handle) {
     overlayHandle = handle;
 }
+
+float Overlay::getAspectRatio() {
+    if (capture) {
+        int w = capture->getWidth();
+        int h = capture->getHeight();
+
+        if (h > 0) {
+            return static_cast<float>(w) / static_cast<float>(h);
+        }
+    }
+    return 1.0f;
+}
+
+void Overlay::setReferenceSpace(OverlayReferenceSpace space) {
+    referenceSpace = space;
+}
+
+void Overlay::setRollingLock(bool enabled) {
+    rollingLock = enabled;
+}

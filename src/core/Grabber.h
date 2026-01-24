@@ -12,7 +12,7 @@ class RotationCalculation {
 public:
     static float getLevelRotationCos(DirectX::XMVECTOR axis, DirectX::XMVECTOR screenTop);
 
-    static DirectX::XMMATRIX getRotationMatAlongAxis(DirectX::XMVECTOR axis, float rotationCos);
+    static DirectX::XMVECTOR getRotationQuatAlongAxis(DirectX::XMVECTOR axis, float rotationCos);
 };
 
 

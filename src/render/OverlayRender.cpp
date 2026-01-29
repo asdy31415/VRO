@@ -58,8 +58,10 @@ void OverlayRenderer::destroyVROverlay(Overlay& overlay) {
     }
 }
 
-void OverlayRenderer::render(Overlay& overlay) {
-    vr::VROverlayHandle_t handle = overlay.getVROverlayHandle();
+void OverlayRenderer::render(Overlay* overlay) {
+    if (!overlay) return;
+
+    vr::VROverlayHandle_t handle = overlay->getVROverlayHandle();
 
     // Do nothing if overlay handle is invalid
     if (handle == vr::k_ulOverlayHandleInvalid) {
@@ -72,7 +74,7 @@ void OverlayRenderer::render(Overlay& overlay) {
     }
 
     // Get Texture from Overlay
-    ID3D11Texture2D* d3dTexture = overlay.getTexture();
+    ID3D11Texture2D* d3dTexture = overlay->getTexture();
     
     if (!d3dTexture) {
         // Texture isn't ready yet
@@ -88,7 +90,7 @@ void OverlayRenderer::render(Overlay& overlay) {
     vrOverlay->SetOverlayTexture(handle, &vrTexture);
     
     // Set Overlay Transform
-    DirectX::XMMATRIX xmMatrix = overlay.getTransformMatrix();
+    DirectX::XMMATRIX xmMatrix = overlay->getTransformMatrix();
     
     vr::HmdMatrix34_t vrMatrix;
     memcpy(&vrMatrix, &xmMatrix, sizeof(vrMatrix));

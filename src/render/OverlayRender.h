@@ -16,7 +16,7 @@ public:
 
     void destroyVROverlay(Overlay& ovelay);
 
-    void render(Overlay& ovarlay);
+    void render(Overlay* ovarlay);
 
 private:
     VRSystemManager& vrManager;

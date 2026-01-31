@@ -53,6 +53,22 @@ void Overlay::setCapture(std::unique_ptr<BaseCapture> newCapture) {
     capture = std::move(newCapture);
 }
 
+void Overlay::setTexture(ID3D11Texture2D* newTexture) {
+    // Release old texture if it exists
+    if (this->texture) {
+        this->texture->Release();
+        this->texture = nullptr;
+    }
+
+    this->texture = newTexture;
+
+    // If newTexture is not null, we should AddRef it because we are storing a pointer to it
+    // (Assuming the caller might release their copy, or we want shared ownership)
+    if (this->texture) {
+        this->texture->AddRef();
+    }
+}
+
 void Overlay::update() {
     if (capture && capture->captureFrame()) {
         texture = capture->getTexture();

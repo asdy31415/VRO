@@ -29,6 +29,8 @@ public:
 
     void setCapture(std::unique_ptr<BaseCapture> newCapture);
 
+    void setTexture(ID3D11Texture2D* newTexture);
+
     void update();
 
     void setVROverlayHandle(vr::VROverlayHandle_t handle);

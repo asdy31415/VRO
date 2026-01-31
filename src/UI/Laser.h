@@ -7,18 +7,26 @@
 #include "OverlayManager.h"
 
 
-class Laser {
+class LaserBeam {
 public:
-    Laser(ID3D11Device* device, ID3D11DeviceContext* context);
-    ~Laser();
+    // The overlay passed here should have the "Beam" texture loaded.
+    LaserBeam(ControllerTransform& transform, Overlay& beamOverlay);
+    ~LaserBeam();
 
-    void update(ControllerTransform& controller);
+    void update();
+
+    // Set how wide the beam is (in meters). 
+    // The Length is automatically calculated based on the texture's aspect ratio.
+    void setWidth(float widthMeters);
+
+    static ID3D11Texture2D* CreateSolidTexture(ID3D11Device* device, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
 private:
-    ID3D11Device* m_device;
-    ID3D11DeviceContext* m_context;
+    ControllerTransform& m_controller;
+    Overlay& m_overlay;
+    // Helper to calculate the correct matrix
+    DirectX::XMMATRIX CalculateBeamTransform();
 
-    std::unique_ptr<Overlay> beamOverlay;
-    
-    ID3D11Texture2D* CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+    float m_width = 0.01f;
+    float m_length = 2.0f;
 };

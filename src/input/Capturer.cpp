@@ -2,219 +2,221 @@
 
 #include <iostream>
 
+#include <windows.graphics.capture.interop.h>
+#include <windows.graphics.directx.direct3d11.interop.h> 
+
+namespace WGD = winrt::Windows::Graphics::DirectX;
+namespace WGC = winrt::Windows::Graphics::Capture;
+
+extern "C" {
+    HRESULT __stdcall CreateDirect3D11DeviceFromDXGIDevice(::IDXGIDevice* dxgiDevice,
+        ::IInspectable** graphicsDevice);
+}
+
 // Sets DPI for consistent window scaling behavior.
 BaseCapture::BaseCapture() {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    try {
+        winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    } catch (...) {
+        // Apartment might already be initialized by the host application
+    }
 }
 
 BaseCapture::~BaseCapture() {
+    StopCaptureInternal();
     if (dxTexture) dxTexture->Release();
-    delete[] pixels;
-    if (hBitmap) DeleteObject(hBitmap);
-    if (hMemoryDC) DeleteDC(hMemoryDC);
-    if (hWindowDC) ReleaseDC(nullptr, hWindowDC);
 }
 
-// Allocate memory and GDI resources for bitmap capture.
-bool BaseCapture::allocateBitmapResources(int w, int h) {
-    width = w;
-    height = h;
-
-    // Create an in-memory DC compatible with the window DC.
-    hMemoryDC = CreateCompatibleDC(hWindowDC);
-
-    // Create a compatible bitmap to hold the captured pixels.
-    hBitmap = CreateCompatibleBitmap(hWindowDC, width, height);
-    SelectObject(hMemoryDC, hBitmap);
-
-    // Allocate raw pixel buffer (aligned to 4 bytes per pixel).
-    int rowPitch = ((width * 32 + 31) / 32) * 4;
-    pixels = new unsigned char[rowPitch * height];
-    return true;
-}
 
 // Create a D3D11 dynamic texture for GPU access.
 bool BaseCapture::initDX(ID3D11Device* device, ID3D11DeviceContext* context) {
     dxDevice = device;
     dxContext = context;
 
-    D3D11_TEXTURE2D_DESC desc = {};
-    desc.Width = width;
-    desc.Height = height;
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_DYNAMIC;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (!dxDevice || !item) return false;
 
-    HRESULT hr = dxDevice->CreateTexture2D(&desc, nullptr, &dxTexture);
+    winrt::com_ptr<::IDXGIDevice> dxgiDevice;
+    dxDevice->QueryInterface(dxgiDevice.put());
+
+    winrt::com_ptr<::IInspectable> inspectableDevice;
+    HRESULT hr = CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(), inspectableDevice.put());
     if (FAILED(hr)) {
-        std::cerr << "Failed to create DX texture" << std::endl;
+        std::cerr << "Failed to wrap D3D11 device for WGC." << std::endl;
         return false;
     }
+    wgcDevice = inspectableDevice.as<WGD::Direct3D11::IDirect3DDevice>();
+
+    // 2. Start the WGC session
+    StartCaptureInternal();
 
     return true;
 }
 
-// Uploads CPU pixel buffer (from GetDIBits) to the D3D11 texture.
-bool BaseCapture::updateTextureFromPixels() {
-    if (!dxTexture || !dxContext || !pixels)
-        return false;
+void BaseCapture::StartCaptureInternal() {
+    if (!item || !wgcDevice) return;
 
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    int rowPitch = ((width * 32 + 31) / 32) * 4;
+    // We use CreateFreeThreaded to avoid needing a DispatcherQueue on the calling thread.
+    // This is crucial for console apps or background threads.
+    framePool = WGC::Direct3D11CaptureFramePool::CreateFreeThreaded(
+        wgcDevice,
+        WGD::DirectXPixelFormat::B8G8R8A8UIntNormalized,
+        2,
+        item.Size());
 
-    // Map the texture for CPU write access.
-    if (SUCCEEDED(dxContext->Map(dxTexture, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-        for (int y = 0; y < height; y++) {
-            memcpy(
-                static_cast<BYTE*>(mapped.pData) + y * mapped.RowPitch,
-                pixels + y * rowPitch,
-                width * 4
-            );
+    session = framePool.CreateCaptureSession(item);
+
+    // Handle Frame Arrived
+    framePool.FrameArrived([this](WGC::Direct3D11CaptureFramePool const& sender, IInspectable const&) {
+        auto frame = sender.TryGetNextFrame();
+        if (frame) {
+            std::lock_guard<std::mutex> lock(frameMutex);
+            latestFrame = frame;
+            newFrameAvailable = true;
         }
-        dxContext->Unmap(dxTexture, 0);
-        return true;
+    });
+
+    session.StartCapture();
+}
+
+
+void BaseCapture::StopCaptureInternal() {
+    if (session) {
+        session.Close();
+        session = nullptr;
     }
-    return false;
-}
-
-/* ===============================
-   WindowCapture Implementation
-   =============================== */
-
-// Sets up GDI resources for capturing a specific HWND.
-WindowCapture::WindowCapture(HWND hwnd_) : hwnd(hwnd_) {
-    RECT rect;
-    if (GetWindowRect(hwnd, &rect)) {
-        width = rect.right - rect.left;
-        height = rect.bottom - rect.top;
-    } else {
-        std::cerr << "GetWindowRect failed!\n";
-        width = height = 0;
+    if (framePool) {
+        framePool.Close();
+        framePool = nullptr;
     }
-    // Get device context for the target window.
-    hWindowDC = GetDC(hwnd);
-
-    // Create memory DC + bitmap for off-screen capture.
-    allocateBitmapResources(width, height);
 }
 
-WindowCapture::~WindowCapture() {
-    if (hwnd && hWindowDC)
-        ReleaseDC(hwnd, hWindowDC);
-}
+bool BaseCapture::captureFrame() {
+    if (!dxDevice || !dxContext) return false;
 
-bool WindowCapture::captureFrame() {
-    if (!hWindowDC || !hMemoryDC)
-        return false;
-
-    // Try PrintWindow first (works for most non-OpenGL windows).
-    if (!PrintWindow(hwnd, hMemoryDC, PW_RENDERFULLCONTENT)) {
-        // Fallback: direct BitBlt copy if PrintWindow fails.
-        BitBlt(hMemoryDC, 0, 0, width, height, hWindowDC, 0, 0, SRCCOPY);
+    // Check if WGC gave us a new frame
+    WGC::Direct3D11CaptureFrame frameToProcess{ nullptr };
+    {
+        std::lock_guard<std::mutex> lock(frameMutex);
+        if (newFrameAvailable && latestFrame) {
+            frameToProcess = latestFrame;
+            newFrameAvailable = false;
+        }
     }
 
-    // Describe the bitmap layout for pixel extraction.
-    BITMAPINFOHEADER bi = {};
-    bi.biSize = sizeof(bi);
-    bi.biWidth = width;
-    bi.biHeight = -height;
-    bi.biPlanes = 1;
-    bi.biBitCount = 32;
-    bi.biCompression = BI_RGB;
+    // If we have a new frame, update our main dxTexture
+    if (frameToProcess) {
+        // Get the texture interface from the WGC frame
+        auto surface = frameToProcess.Surface();
+        auto surfaceInterop = surface.as<Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
+        
+        winrt::com_ptr<ID3D11Texture2D> wgcTexture;
+        surfaceInterop->GetInterface(IID_PPV_ARGS(wgcTexture.put()));
 
-    // Retrieve pixel data into our buffer.
-    if (!GetDIBits(hMemoryDC, hBitmap, 0, height, pixels, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS))
-        return false;
+        if (wgcTexture) {
+            D3D11_TEXTURE2D_DESC desc;
+            wgcTexture->GetDesc(&desc);
 
-    return updateTextureFromPixels();
-}
+            // Create or Recreate dxTexture if dimensions changed or it doesn't exist
+            if (!dxTexture || width != desc.Width || height != desc.Height) {
+                if (dxTexture) dxTexture->Release();
+                
+                width = desc.Width;
+                height = desc.Height;
 
-/* ===============================
-   ScreenCapture Implementation
-   =============================== */
-   
-// Sets up resources for full-screen capture.
-ScreenCapture::ScreenCapture(int screenIndex_) : screenIndex(screenIndex_) {
+                D3D11_TEXTURE2D_DESC internalDesc = desc;
+                internalDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                internalDesc.MiscFlags = 0;
+                internalDesc.CPUAccessFlags = 0; // GPU to GPU copy, no CPU access needed
+                internalDesc.Usage = D3D11_USAGE_DEFAULT;
 
-    DISPLAY_DEVICEW dd;
-    dd.cb = sizeof(dd);
-    bool found = false;
-    wchar_t deviceName[32] = L"";
-
-    // Enumerate all display devices until the requested index is found
-    for (int i = 0; EnumDisplayDevicesW(nullptr, i, &dd, 0); i++) {
-        if (dd.StateFlags & DISPLAY_DEVICE_ACTIVE) {
-            if (i == screenIndex) {
-                wcscpy_s(deviceName, dd.DeviceName);
-                found = true;
-                break;
+                if (FAILED(dxDevice->CreateTexture2D(&internalDesc, nullptr, &dxTexture))) {
+                    std::cerr << "Failed to create internal texture." << std::endl;
+                    return false;
+                }
+                
+                // If size changed, we might need to recreate the frame pool, 
+                // but WGC handles standard resizes reasonably well. 
+                // For robust resizing, we would call framePool.Recreate() here.
+                framePool.Recreate(wgcDevice, WGD::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, item.Size());
             }
+
+            // Copy GPU memory from WGC texture to our internal texture
+            dxContext->CopyResource(dxTexture, wgcTexture.get());
+            return true;
         }
     }
 
-    if (!found) {
-        std::cerr << "Invalid screen index: " << screenIndex << ", defaulting to primary display.\n";
-        wcscpy_s(deviceName, L"\\\\.\\DISPLAY1");
-    }
+    // Return true if we have a valid texture at all (even if not updated this specific tick)
+    return (dxTexture != nullptr);
+}
 
-    // Create a device context for the target display
-    hWindowDC = CreateDCW(L"DISPLAY", deviceName, nullptr, nullptr);
-    if (!hWindowDC) {
-        std::cerr << "Failed to create DC for display: " << deviceName << "\n";
+WindowCapture::WindowCapture(HWND hwnd_) : hwnd(hwnd_) {
+
+    auto interopFactory = winrt::get_activation_factory<
+        WGC::GraphicsCaptureItem, 
+        ::IGraphicsCaptureItemInterop // Global scope interface
+    >();
+
+    try {
+        interopFactory->CreateForWindow(
+            hwnd, 
+            winrt::guid_of<WGC::GraphicsCaptureItem>(), 
+            winrt::put_abi(item)
+        );
+        if (item) {
+            auto size = item.Size();
+            width = size.Width;
+            height = size.Height;
+        }
+    } catch (winrt::hresult_error const& ex) {
+        std::cerr << "WindowCapture failed: " << winrt::to_string(ex.message()) << std::endl;
+    }
+}
+
+WindowCapture::~WindowCapture() {}
+
+ScreenCapture::ScreenCapture(int screenIndex_) : screenIndex(screenIndex_) {
+    // 1. Find the HMONITOR for the given index
+    struct MonitorEnumData {
+        int targetIndex;
+        int currentIndex;
+        HMONITOR result;
+    } data = { screenIndex, 0, nullptr };
+
+    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR hMonitor, HDC, LPRECT, LPARAM lParam) -> BOOL {
+        auto* pData = reinterpret_cast<MonitorEnumData*>(lParam);
+        if (pData->currentIndex == pData->targetIndex) {
+            pData->result = hMonitor;
+            return FALSE; // Stop enumerating
+        }
+        pData->currentIndex++;
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&data));
+
+    if (!data.result) {
+        std::cerr << "ScreenCapture: Invalid screen index " << screenIndex << std::endl;
         return;
     }
 
-    // Query monitor geometry
-    MONITORINFOEXW mi = {};
-    mi.cbSize = sizeof(mi);
-
-    HMONITOR hMon = MonitorFromPoint({ 0,0 }, MONITOR_DEFAULTTOPRIMARY);
-    // Locate the specific monitor handle by enumerating monitors
-    int monitorCount = 0;
-    EnumDisplayMonitors(
-        nullptr,
-        nullptr,
-        [](HMONITOR hMonitor, HDC, LPRECT, LPARAM lParam) -> BOOL {
-            auto data = reinterpret_cast<std::pair<int, MONITORINFOEXW*>*>(lParam);
-            if (data->first-- == 0) {
-                data->second->cbSize = sizeof(MONITORINFOEXW);
-                GetMonitorInfoW(hMonitor, data->second);
-                return FALSE; // stop enumeration
-            }
-            return TRUE;
-        },
-        reinterpret_cast<LPARAM>(&std::pair<int, MONITORINFOEXW*>(screenIndex, &mi))
-    );
-
-    // Extract width and height of this monitor
-    width = mi.rcMonitor.right - mi.rcMonitor.left;
-    height = mi.rcMonitor.bottom - mi.rcMonitor.top;
-
-    // Create compatible memory DC and bitmap for capture
-    allocateBitmapResources(width, height);
-}
-
-
-bool ScreenCapture::captureFrame() {
-    if (!hWindowDC || !hMemoryDC)
-        return false;
-
-    BitBlt(hMemoryDC, 0, 0, width, height, hWindowDC, 0, 0, SRCCOPY);
-
-    BITMAPINFOHEADER bi = {};
-    bi.biSize = sizeof(bi);
-    bi.biWidth = width;
-    bi.biHeight = -height;
-    bi.biPlanes = 1;
-    bi.biBitCount = 32;
-    bi.biCompression = BI_RGB;
-
-    if (!GetDIBits(hMemoryDC, hBitmap, 0, height, pixels, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS))
-        return false;
-
-    return updateTextureFromPixels();
+    // 2. Create CaptureItem from HMONITOR
+    auto interopFactory = winrt::get_activation_factory<
+        WGC::GraphicsCaptureItem, 
+        ::IGraphicsCaptureItemInterop
+    >();
+    
+    try {
+        interopFactory->CreateForMonitor(
+            data.result, 
+            winrt::guid_of<WGC::GraphicsCaptureItem>(), 
+            winrt::put_abi(item)
+        );
+        if (item) {
+            auto size = item.Size();
+            width = size.Width;
+            height = size.Height;
+        }
+    } catch (winrt::hresult_error const& ex) {
+        std::cerr << "ScreenCapture failed: " << winrt::to_string(ex.message()) << std::endl;
+    }
 }

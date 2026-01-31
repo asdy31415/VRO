@@ -37,6 +37,7 @@ target_link_libraries(VRO
     user32
     gdi32
     dxguid
+    windowsapp
 )
 
 set_target_properties(VRO PROPERTIES
